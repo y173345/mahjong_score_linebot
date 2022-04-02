@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from linebot import WebhookParser
 from linebot.models import TextMessage
 from aiolinebot import AioLineBotApi
@@ -9,8 +9,19 @@ parser = WebhookParser(channel_secret="855b9868cfb09f73aa4959f49757ecca")
 
 app = FastAPI()
 
+async def handle_events(events):
+    for ev in events:
+        try: 
+            await line_api.reply_message_async(
+                ev.reply_token,
+                TextMessage(text=f'You said: {ev.message.text}')
+            )
+        except Except Exception:
+            # todo: write an error log
+            pass
+
 @app.post("/messaging_api/handle_request")
-async def handle_request(request: Request):
+async def handle_request(request: Request, background_tasks: BackgroundTasks):
     # リクエストをパースしてイベントを取得(署名検証あり)
     events = parser.parse(
         (await request.body()).decode('utf-8'),
@@ -18,10 +29,6 @@ async def handle_request(request: Request):
     )
 
     # 各イベントを処理
-    for ev in events:
-        await line_api.reply_message_async(
-            ev.reply_token,
-            TextMessage(text=f'You said: {ev.message.text}')
-        )
+    background_tasks.add_task(handle_events, events=events)
     
     return "ok"
